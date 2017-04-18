@@ -19,9 +19,10 @@ class BlogHandler(webapp2.RequestHandler):
             Get all posts by a specific user, ordered by creation date (descending).
             The user parameter will be a User object.
         """
+        key = user.key()
+        query = Post.gql("WHERE author = :key", key=key)
 
-        # TODO - filter the query so that only posts by the given user
-        return None
+        return query.fetch(limit=limit, offset=offset)
 
     def get_user_by_name(self, username):
         """ Get a user object from the db, based on their username """
@@ -69,6 +70,7 @@ class IndexHandler(BlogHandler):
         response = t.render(users = users)
         self.response.write(response)
 
+
 class BlogIndexHandler(BlogHandler):
 
     # number of blog posts per page to display
@@ -115,12 +117,14 @@ class BlogIndexHandler(BlogHandler):
                     username=username)
         self.response.out.write(response)
 
+
 class NewPostHandler(BlogHandler):
 
     def render_form(self, title="", body="", error=""):
         """ Render the new post form with or without an error, based on parameters """
         t = jinja_env.get_template("newpost.html")
-        response = t.render(title=title, body=body, error=error)
+        username = self.request.get("username")
+        response = t.render(title=title, body=body, username=username, error=error)
         self.response.out.write(response)
 
     def get(self):
@@ -137,7 +141,7 @@ class NewPostHandler(BlogHandler):
             post = Post(
                 title=title,
                 body=body,
-                author=self.user)
+                author=self.user.key())
             post.put()
 
             # get the id of the new post, so we can render the post's page (via the permalink)
@@ -153,9 +157,12 @@ class ViewPostHandler(BlogHandler):
         """ Render a page with post determined by the id (via the URL/permalink) """
 
         post = Post.get_by_id(int(id))
+        # used the key to find the username
+        key = post.author
+        username = key.username
         if post:
             t = jinja_env.get_template("post.html")
-            response = t.render(post=post)
+            response = t.render(post=post, username=username)
         else:
             error = "there is no post with id %s" % id
             t = jinja_env.get_template("404.html")
@@ -254,7 +261,7 @@ class SignupHandler(BlogHandler):
             response = t.render(username=username, email=email, errors=errors)
             self.response.out.write(response)
         else:
-            self.redirect('/blog/newpost')
+            self.redirect('/blog/newpost?username=' + username)
 
 class LoginHandler(BlogHandler):
 
@@ -296,7 +303,7 @@ app = webapp2.WSGIApplication([
     ('/blog/newpost', NewPostHandler),
     webapp2.Route('/blog/<id:\d+>', ViewPostHandler),
     webapp2.Route('/blog/<username:[a-zA-Z0-9_-]{3,20}>', BlogIndexHandler),
-    ('/signup', SignupHandler),
+    ('/register', SignupHandler),
     ('/login', LoginHandler),
     ('/logout', LogoutHandler)
 ], debug=True)
